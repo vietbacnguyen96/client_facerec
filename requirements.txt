@@ -1,0 +1,6 @@
+pillow
+opencv-python
+requests
+unidecode
+gtts
+playsound
