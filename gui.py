@@ -61,25 +61,30 @@ if args.debug == 'True':
 global api_list, api_index, url
 
 # url = 'http://10.1.11.47:5051/'
-url = 'http://192.168.0.104:5052/'
-# url = 'http://123.16.55.212:85/'
+# url = 'http://192.168.0.102:5052/'
+url = 'http://192.168.1.88:5052/'
 
 # path = "E:/AI_Awards_2022/"
 path = "./"
 
 
-api_list = [url + 'facerec', url + 'FaceRec_DREAM', url + 'FaceRec_3DFaceModeling']
+api_list = [url + 'facerec', url + 'FaceRec_DREAM', url + 'FaceRec_3DFaceModeling', url + 'check_pickup']
 request_times = [1, 10, 10]
 api_index = 0
 
 # test
-secret_key = "c8d1287c-7849-4dac-ac4f-2300b540bc18"
+secret_key = "51bbe3c5-092e-4be4-bcd0-1b438a46b598"
 
 
 window_name = 'Hệ thống phần mềm AI nhận diện khuôn mặt VKIST'
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 temp_boxes = []
+temp_ids = []
+temp_roles = []
+temp_timelines = []
+temp_target_index = []
+
 predict_labels = []
 protected_boxid = []
 queue = []
@@ -89,7 +94,7 @@ fontface = cv2.FONT_HERSHEY_SIMPLEX
 fontscale = 0.8
 fontcolor = (0,255,0)
 
-extend_pixel = 20
+extend_pixel = 50
 minimum_face_size = 60
 
 box_size = 250
@@ -136,13 +141,17 @@ ellipse_points.append([-axesLength[0] + int(frame_width / 2), 0 + int(frame_heig
 ellipse_points.append([0 + int(frame_width / 2), axesLength[1] + int(frame_height / 2)])
 ellipse_points.append([axesLength[0] + int(frame_width / 2), 0 + int(frame_height / 2)])
 
-sample_face_images = dict()
+# sample_face_images = dict()
+sample_face_images = []
 
-print(ellipse_points)
+# print(ellipse_points)
 
 sound_dst_dir = path + 'sounds/'
 
 video_dst_dir = path + 'videos/'
+
+
+
 
 # record_time = datetime.fromtimestamp(time.time())
 # year = '20' + record_time.strftime('%y')
@@ -196,10 +205,11 @@ def say_hello(content):
         tts.save(sound_dst_dir + unsign_content + ".mp3")
     
     playsound.playsound(sound_dst_dir + unsign_content + ".mp3", True)
-def face_recognize(frame, box_position):
+def face_recognize(frame):
     cur_hour = str(datetime.now()).split(" ")[1].split(":")[0]
 
     global predict_labels, time_appear, max_time_appear, temp_id, temp_name, cur_time, api_index, max_times
+    global temp_ids, temp_roles, temp_timelines
 
     _, encimg = cv2.imencode(".jpg", frame)
     img_byte = encimg.tobytes()
@@ -214,7 +224,7 @@ def face_recognize(frame, box_position):
 
     try:
         print('Server response', response.json())
-        for id, bb, name, profileID, generated_face_id in zip(response.json()['result']['id'], response.json()['result']['bboxes'], response.json()['result']['identities'], response.json()['result']['profilefaceIDs'], response.json()['result']['3DFace'] ):
+        for id, time_line, role, bb, name, profileID, generated_face_id in zip(response.json()['result']['id'], response.json()['result']['timelines'], response.json()['result']['roles'], response.json()['result']['bboxes'], response.json()['result']['identities'], response.json()['result']['profilefaceIDs'], response.json()['result']['3DFace'] ):
             response_time_s = time.time() - seconds
             print("Server's response time: " + "%.2f" % (response_time_s) + " (s)")
             bb = bb.split(' ')
@@ -262,6 +272,10 @@ def face_recognize(frame, box_position):
                         cur_generated_face = cv2.cvtColor(cur_generated_face, cv2.COLOR_BGR2RGB)
 
                     predict_labels.append([non_accent_name, faceI, content, cur_profile_face, cur_generated_face])
+
+                    temp_ids.append(id)
+                    temp_timelines.append(time_line)
+                    temp_roles.append(role)
             else:
                 cur_time += 1
                 if cur_time >= max_times:
@@ -318,7 +332,7 @@ def mode_3():
 
 def sample_data_GV():
     global take_sample_data_state, check_points, take_sample_data_state_GV, take_sample_data_state_HS, take_sample_data_state_PH
-    print('\nPLEASE ROTATE YOUR HEAD UNTIL ALL DOTS TURN GREEN\n')
+    # print('\nPLEASE ROTATE YOUR HEAD UNTIL ALL DOTS TURN GREEN\n')
     mode_1_btn["state"] = DISABLED
     # mode_2_btn["state"] = DISABLED
     mode_3_btn["state"] = DISABLED
@@ -334,11 +348,11 @@ def sample_data_GV():
     sample_data_PH_btn["state"] = DISABLED
 
     check_points = (np.zeros(number_check_points) == 1)
-    print('check_points:', check_points) 
+    # print('check_points:', check_points) 
 
 def sample_data_HS():
     global take_sample_data_state, check_points, take_sample_data_state_GV, take_sample_data_state_HS, take_sample_data_state_PH
-    print('\nPLEASE ROTATE YOUR HEAD UNTIL ALL DOTS TURN GREEN\n')
+    # print('\nPLEASE ROTATE YOUR HEAD UNTIL ALL DOTS TURN GREEN\n')
     mode_1_btn["state"] = DISABLED
     # mode_2_btn["state"] = DISABLED
     mode_3_btn["state"] = DISABLED
@@ -354,11 +368,11 @@ def sample_data_HS():
     sample_data_PH_btn["state"] = DISABLED
 
     check_points = (np.zeros(number_check_points) == 1)
-    print('check_points:', check_points) 
+    # print('check_points:', check_points) 
 
 def sample_data_PH():
     global take_sample_data_state, check_points, take_sample_data_state_GV, take_sample_data_state_HS, take_sample_data_state_PH
-    print('\nPLEASE ROTATE YOUR HEAD UNTIL ALL DOTS TURN GREEN\n')
+    # print('\nPLEASE ROTATE YOUR HEAD UNTIL ALL DOTS TURN GREEN\n')
     mode_1_btn["state"] = DISABLED
     # mode_2_btn["state"] = DISABLED
     mode_3_btn["state"] = DISABLED
@@ -374,7 +388,7 @@ def sample_data_PH():
     sample_data_HS_btn["state"] = DISABLED
 
     check_points = (np.zeros(number_check_points) == 1)
-    print('check_points:', check_points) 
+    # print('check_points:', check_points) 
 
 def cancel_data():
     global take_sample_data_state, check_points
@@ -412,16 +426,16 @@ def upload_data():
             new_user_id = simpledialog.askstring('New user ID', 'Please insert ID name')
             role = ""
             if take_sample_data_state_GV:
-                role = "GV"
+                role = "teacher"
             if take_sample_data_state_HS:
-                role = "HS"
+                role = "student"
             if take_sample_data_state_PH:
-                role = "PH"
+                role = "parent"
 
-            payload = json.dumps({"secret_key": secret_key, "newID": new_user_id, "newFaceImages": sample_face_images, "role":role})
+            payload = json.dumps({"secret_key": secret_key, "name": new_user_id, "img": sample_face_images, "type_role":role, "class_id":'-1', "picker_id":'-1', "age":'-1', "gender":'Nam'})
 
-            response = requests.post(url + 'MultiFacesRegister', data=payload, headers=headers, timeout=100)
-            print(response.text)
+            response = requests.post(url + 'facereg', data=payload, headers=headers, timeout=100)
+            print('\nRegister new person is ' + response.json()['result']['message'] + '\n')
 
             check_points = (np.zeros(number_check_points) == 1)
             take_sample_data_state = False
@@ -436,7 +450,7 @@ def upload_data():
             sample_data_GV_btn["state"] = NORMAL
             sample_data_HS_btn["state"] = NORMAL
             sample_data_PH_btn["state"] = NORMAL
-
+            sample_face_images = []
             # print('Complete update data')
             cv2.destroyAllWindows()
         else:
@@ -464,32 +478,37 @@ def show_head_pose(euler_angle, face_img):
 
     if pitch_angle < -1 * upper_delta_pitch:
         if not check_points[1]:
-            print('Up')
-            sample_face_images['upFace'] = img_2_str(face_img)
+            # print('Up')
+            # sample_face_images['upFace'] = img_2_str(face_img)
+            sample_face_images.append(img_2_str(face_img))
             check_points[1] = True
 
     if yaw_angle > upper_delta_yaw:
         if not check_points[2]:
-            print('Right')
-            sample_face_images['rightFace'] = img_2_str(face_img)
+            # print('Right')
+            # sample_face_images['rightFace'] = img_2_str(face_img)
+            sample_face_images.append(img_2_str(face_img))
             check_points[2] = True
     
     if pitch_angle > upper_delta_pitch:
         if not check_points[3]:
-            print('Down')
-            sample_face_images['downFace'] = img_2_str(face_img)
+            # print('Down')
+            # sample_face_images['downFace'] = img_2_str(face_img)
+            sample_face_images.append(img_2_str(face_img))
             check_points[3] = True
     
     if yaw_angle < -1 * upper_delta_yaw:
         if not check_points[4]:
-            print('Left')
-            sample_face_images['leftFace'] = img_2_str(face_img)
+            # print('Left')
+            # sample_face_images['leftFace'] = img_2_str(face_img)
+            sample_face_images.append(img_2_str(face_img))
             check_points[4] = True
 
     if abs(pitch_angle) < lower_delta_pitch and abs(yaw_angle) < lower_delta_yaw and abs(roll_angle) < lower_delta_roll:
         if not check_points[0]:
-            print('Frontal')
-            sample_face_images['frontalFace'] = img_2_str(face_img)
+            # print('Frontal')
+            # sample_face_images['frontalFace'] = img_2_str(face_img)
+            sample_face_images.append(img_2_str(face_img))
             check_points[0] = True
 
 def mode_4():
@@ -566,6 +585,23 @@ upload_data_btn.place(x = button_size_x * 4 + button_size_x2 * 3 + x_dis, y = y_
 # sample_data_btn["state"] = DISABLED
 count = 0
 
+def largest_indices(arr):
+    first_largest = second_largest = float("-inf")
+    first_index = second_index = None
+
+    for i, num in enumerate(arr):
+        if num > first_largest:
+            second_largest = first_largest
+            second_index = first_index
+
+            first_largest = num
+            first_index = i
+        elif num > second_largest:
+            second_largest = num
+            second_index = i
+
+    return first_index, second_index
+
 class MainWindow():
     def __init__(self, window, cap):
         self.window = window
@@ -588,8 +624,8 @@ class MainWindow():
         self.update_image()
 
     def update_image(self):
-        global count, predict_labels, temp_boxes, prev_frame_time, new_frame_time, queue, api_index, request_times, take_photo_state, protected_boxid, take_sample_data_state
-        global image_id
+        global count, predict_labels, temp_boxes, prev_frame_time, new_frame_time, queue, api_index, request_times, take_photo_state, protected_boxid, take_sample_data_state, temp_target_index
+        global image_id, temp_ids, temp_roles, temp_timelines, extend_pixel
         count += 1
 
         frame_show = np.ones((window_size_y, window_size_x, 3),dtype='uint8') * 255    
@@ -626,8 +662,15 @@ class MainWindow():
             delta = 40
             if len(temp_boxes) == 1:
                 xmin, ymin, xmax, ymax = int(temp_boxes[0][0]), int(temp_boxes[0][1]), int(temp_boxes[0][2]), int(temp_boxes[0][3])
-                # if abs((xmin +xmax) * 0.5 - self.width * 0.5) < delta and abs((ymin + ymax) * 0.5 - self.height * 0.5) < delta:
-                #     draw_ellipse(final_frame, temp_boxes, box_color=(0, 0, 255))
+                xmin -= extend_pixel
+                xmax += extend_pixel
+                ymin -= 2 * extend_pixel
+                ymax += extend_pixel
+
+                xmin = 0 if xmin < 0 else xmin
+                ymin = 0 if ymin < 0 else ymin
+                xmax = frame_width if xmax >= frame_width else xmax
+                ymax = frame_height if ymax >= frame_height else ymax
 
                 marks = fa.get_landmarks(orig_image, temp_boxes)
                 for landmarks, bbox_I in zip(marks, temp_boxes):
@@ -645,48 +688,89 @@ class MainWindow():
             if len(temp_boxes) == 0:
                 temp_boxes, _, probs = inference(net_dnn, orig_image)
 
-            # Filter face images
-            # frame_width = int(webcam.get(3))
-            # frame_height = int(webcam.get(4))
+            box_dimensions = []
             for i, bbox_I in enumerate(temp_boxes):
 
                 xmin, ymin, xmax, ymax = int(bbox_I[0]), int(bbox_I[1]), int(bbox_I[2]), int(bbox_I[3])
-                
+                diagonal = math.sqrt((xmax - xmin) * (xmax - xmin) + (ymax - ymin) * (ymax - ymin))
+                box_dimensions.append(diagonal)
 
-            draw_box(final_frame, temp_boxes, box_color=(0, 255, 0))
+            if len(temp_boxes) > 1:
+                temp_target_index = largest_indices(box_dimensions)
+
+            # draw_box(final_frame, temp_boxes, box_color=(0, 255, 0))
             marks = fa.get_landmarks(orig_image, temp_boxes)
 
             if (api_index < 2 or (api_index == 2 and take_photo_state)):
                 if (count % request_times[api_index]) == 0:
+                    
                     for landmarks, bbox_I in zip(marks, temp_boxes):
 
                         xmin, ymin, xmax, ymax = int(bbox_I[0]), int(bbox_I[1]), int(bbox_I[2]), int(bbox_I[3])
 
+                        # draw_box(final_frame, [[xmin, ymin, xmax, ymax]], box_color=(0, 0, 255))
                         # if api_index == 2 and take_photo_state:
-                        #     xmin -= extend_pixel
-                        #     xmax += extend_pixel
-                        #     ymin -= extend_pixel
-                        #     ymax += extend_pixel
+                        xmin -= extend_pixel
+                        xmax += extend_pixel
+                        ymin -= 2 * extend_pixel
+                        ymax += extend_pixel
+                        draw_box(final_frame, [[xmin, ymin, xmax, ymax]], box_color=(255, 0, 0))
 
-                        # xmin = 0 if xmin < 0 else xmin
-                        # ymin = 0 if ymin < 0 else ymin
-                        # xmax = frame_width if xmax >= frame_width else xmax
-                        # ymax = frame_height if ymax >= frame_height else ymax
+                        xmin = 0 if xmin < 0 else xmin
+                        ymin = 0 if ymin < 0 else ymin
+                        xmax = frame_width if xmax >= frame_width else xmax
+                        ymax = frame_height if ymax >= frame_height else ymax
 
                         # for index, idI in enumerate(landmarks):
                         #     cv2.circle(final_frame, (int(marks[index][0]), int(marks[index][1])), 5, (0, 0, 255), -1)  
 
                         queue = [t for t in queue if t.is_alive()]
                         if len(queue) < 3:
-                            # queue.append(threading.Thread(target=face_recognize, args=(orig_image[ymin:ymax, xmin:xmax], [xmin, ymin])))
-                            queue.append(threading.Thread(target=face_recognize, args=(orig_image, [xmin, ymin])))
+                            queue.append(threading.Thread(target=face_recognize, args=(orig_image[ymin:ymax, xmin:xmax],)))
+                            # queue.append(threading.Thread(target=face_recognize, args=(orig_image)))
                             queue[-1].start()
                         count = 0
                     take_photo_state = False
+                    
                     # Check pickup process
-                    # if len(temp_boxes) == 2
-        image_name_y = 5
+                    if len(temp_boxes) > 1:
+                        if len(temp_ids) < 2 or len(temp_ids) < 2 or len(temp_ids) < 2:
+                            print('\nPick up fail\n')
+                        else: 
+                            # print('temp_target_index:', temp_target_index)
+                            index1 = temp_target_index[0]
+                            index2 = temp_target_index[1]
+                            check_pickup_info = {}
 
+                            # print('temp_ids:', temp_ids)
+                            # print('temp_timelines:', temp_timelines)
+                            # print('temp_roles:', temp_roles)
+                            if (temp_roles[index1] == 'student' and temp_roles[index2] != 'student'):
+                                check_pickup_info = {
+                                    'student_id': temp_ids[index1],
+                                    'picker_id': temp_ids[index2],
+                                    'timeline_student': temp_timelines[index1],
+                                    'timeline_picker': temp_timelines[index2],
+                                    'secret_key': secret_key
+                                }
+                            if (temp_roles[index2] == 'student' and temp_roles[index1] != 'student'):
+                                check_pickup_info = {
+                                    'student_id': temp_ids[index2],
+                                    'picker_id': temp_ids[index1],
+                                    'timeline_student': temp_timelines[index2],
+                                    'timeline_picker': temp_timelines[index1],
+                                    'secret_key': secret_key
+                                }
+                            if len(check_pickup_info) > 0:
+                                # print('check_pickup_info:', check_pickup_info)
+                                headers = {'Content-type': 'application/json', 'Accept': 'text/plain', 'charset': 'utf-8'}
+                                payload = json.dumps(check_pickup_info)
+                                response = requests.post(api_list[3], data=payload, headers=headers, timeout=100)
+                                print('\nPick up ' + response.json()['result']['message'] + '\n')
+                            temp_ids = []
+                            temp_timelines = []
+                            temp_roles = []
+        image_name_y = 5
         temp_labels = list(reversed(predict_labels))
         for i, labelI in enumerate(temp_labels):
             if frame_width + distance_x + crop_image_size < window_size_x and int((crop_image_size + distance_y) * i) + distance_y + crop_image_size < window_size_y:
