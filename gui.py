@@ -26,7 +26,7 @@ import math
 from utils.functions import *
 
 
-from utils.caffe.ultra_face_opencvdnn_inference import inference, net as net_dnn
+from utils.caffe.ultra_face_opencvdnn_inference import inference, net as net_dnn, path
 # from mark_detector import MarkDetector
 # mark_detector = MarkDetector()
 
@@ -41,13 +41,11 @@ frame_width = int(webcam.get(3))
 frame_height = int(webcam.get(4))
 
 
-fd = UltraLightFaceDetecion("utils/service/weights/RFB-320.tflite", conf_threshold=0.98)
-fa = CoordinateAlignmentModel("utils/service/weights/coor_2d106.tflite")
-# hp = HeadPoseEstimator("utils/service/weights/head_pose_object_points.npy", w, h)
-hp = HeadPoseEstimator("utils/service/weights/head_pose_object_points.npy", frame_width, frame_height)
-gs = IrisLocalizationModel("utils/service/weights/iris_localization.tflite")
-
-
+fd = UltraLightFaceDetecion(path + "utils/service/weights/RFB-320.tflite", conf_threshold=0.98)
+fa = CoordinateAlignmentModel(path + "utils/service/weights/coor_2d106.tflite")
+# hp = HeadPoseEstimator(path + "utils/service/weights/head_pose_object_points.npy", w, h)
+hp = HeadPoseEstimator(path + "utils/service/weights/head_pose_object_points.npy", frame_width, frame_height)
+gs = IrisLocalizationModel(path + "utils/service/weights/iris_localization.tflite")
 
 # ********************************** Face recognition variables **********************************
 parser = argparse.ArgumentParser(description='Face Recognition')
@@ -62,7 +60,7 @@ global api_list, api_index, url
 
 # url = 'http://10.1.11.47:5051/'
 # url = 'http://192.168.0.102:5052/'
-url = 'http://192.168.1.88:5052/'
+url = 'http://192.168.68.120:5052/'
 
 # path = "E:/AI_Awards_2022/"
 path = "./"
@@ -74,7 +72,6 @@ api_index = 0
 
 # test
 secret_key = "51bbe3c5-092e-4be4-bcd0-1b438a46b598"
-
 
 window_name = 'Hệ thống phần mềm AI nhận diện khuôn mặt VKIST'
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
