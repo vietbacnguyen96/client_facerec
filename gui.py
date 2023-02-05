@@ -25,8 +25,6 @@ import math
 
 from utils.functions import *
 
-# This is new codes
-
 from utils.caffe.ultra_face_opencvdnn_inference import inference, net as net_dnn, path
 # from mark_detector import MarkDetector
 # mark_detector = MarkDetector()
@@ -458,7 +456,7 @@ def img_2_str(img):
 def show_head_pose(euler_angle, face_img):
     """Save face data along with head poses Pitch, Yaw, Roll"""
     global check_points, take_sample_data_state, sample_face_images
-    cv2.imshow('test', face_img)
+    # cv2.imshow('test', face_img)
     pitch_angle = euler_angle[0]
     yaw_angle = euler_angle[1]
     roll_angle = euler_angle[2]
