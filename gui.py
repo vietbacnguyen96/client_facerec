@@ -62,10 +62,6 @@ global api_list, api_index, url
 # url = 'http://192.168.0.102:5052/'
 url = 'http://192.168.68.120:5052/'
 
-# path = "E:/AI_Awards_2022/"
-path = "./"
-
-
 api_list = [url + 'facerec', url + 'FaceRec_DREAM', url + 'FaceRec_3DFaceModeling', url + 'check_pickup']
 request_times = [1, 10, 10]
 api_index = 0
