@@ -59,14 +59,14 @@ global api_list, api_index, url
 
 # url = 'http://10.1.11.47:5051/'
 # url = 'http://192.168.0.102:5052/'
-url = 'http://192.168.68.120:5052/'
+url = 'http://192.168.1.88:5052/'
 
 api_list = [url + 'facerec', url + 'FaceRec_DREAM', url + 'FaceRec_3DFaceModeling', url + 'check_pickup']
-request_times = [1, 10, 10]
+request_times = [10, 10, 10]
 api_index = 0
 
 # test
-secret_key = "51bbe3c5-092e-4be4-bcd0-1b438a46b598"
+secret_key = "b02b1da2-eb83-41b2-9bed-9305c00ab26e"
 
 window_name = 'Hệ thống phần mềm AI nhận diện khuôn mặt VKIST'
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -75,6 +75,7 @@ temp_boxes = []
 temp_ids = []
 temp_roles = []
 temp_timelines = []
+temp_peoplenames = []
 temp_target_index = []
 
 predict_labels = []
@@ -201,7 +202,7 @@ def face_recognize(frame):
     cur_hour = str(datetime.now()).split(" ")[1].split(":")[0]
 
     global predict_labels, time_appear, max_time_appear, temp_id, temp_name, cur_time, api_index, max_times
-    global temp_ids, temp_roles, temp_timelines
+    global temp_ids, temp_roles, temp_timelines, temp_peoplenames
 
     _, encimg = cv2.imencode(".jpg", frame)
     img_byte = encimg.tobytes()
@@ -216,15 +217,22 @@ def face_recognize(frame):
 
     try:
         print('Server response', response.json())
-        for id, time_line, role, bb, name, profileID, generated_face_id in zip(response.json()['result']['id'], response.json()['result']['timelines'], response.json()['result']['roles'], response.json()['result']['bboxes'], response.json()['result']['identities'], response.json()['result']['profilefaceIDs'], response.json()['result']['3DFace'] ):
+        for id, time_line, role, bb, name, profileID, generated_face_id, picker_profile_face_id in zip(response.json()['result']['id'], response.json()['result']['timelines'], response.json()['result']['roles'], response.json()['result']['bboxes'], response.json()['result']['identities'], response.json()['result']['profilefaceIDs'], response.json()['result']['3DFace'], response.json()['result']['pickerProfileFaceIds'] ):
             response_time_s = time.time() - seconds
-            print("Server's response time: " + "%.2f" % (response_time_s) + " (s)")
+            # print("Server's response time: " + "%.2f" % (response_time_s) + " (s)")
+            # print('picker_profile_face_id', picker_profile_face_id)
             bb = bb.split(' ')
+
+            temp_ids.append(id)
+            temp_timelines.append(time_line)
+            temp_roles.append(role)
+            temp_peoplenames.append(name)
+
             if check_first_time_appear(id, name, temp_id) or api_index == 2:
                 time_appear = time.time()
                 max_time_appear = 10
 
-                non_accent_name = remove_accent(temp_name)
+                non_accent_name = remove_accent(temp_name) + ' ' + role
                 if id > -1:
                     front_string = "Xin chào "
                     if int(cur_hour) > 15:
@@ -249,6 +257,7 @@ def face_recognize(frame):
 
                     faceI = cv2.resize(frame[int(float(bb[1])): int(float(bb[3])), int(float(bb[0])): int(float(bb[2]))], (crop_image_size, crop_image_size))
                     cur_profile_face = None
+                    cur_picker_profile_face = None
                     cur_generated_face = None
 
                     if profileID is not None:
@@ -256,6 +265,12 @@ def face_recognize(frame):
                         cur_profile_face = np.array(Image.open(requests.get(cur_url, stream=True).raw))
                         cur_profile_face = cv2.resize(cur_profile_face, (crop_image_size, crop_image_size))
                         cur_profile_face = cv2.cvtColor(cur_profile_face, cv2.COLOR_BGR2RGB)
+
+                    if picker_profile_face_id is not None:
+                        cur_url = url + 'images/' + secret_key + '/' + picker_profile_face_id
+                        cur_picker_profile_face = np.array(Image.open(requests.get(cur_url, stream=True).raw))
+                        cur_picker_profile_face = cv2.resize(cur_picker_profile_face, (crop_image_size, crop_image_size))
+                        cur_picker_profile_face = cv2.cvtColor(cur_picker_profile_face, cv2.COLOR_BGR2RGB)
                     
                     if generated_face_id is not None:
                         cur_url = url + 'images/' + secret_key + '/' + generated_face_id
@@ -263,11 +278,9 @@ def face_recognize(frame):
                         cur_generated_face = cv2.resize(cur_generated_face, (crop_image_size, crop_image_size))
                         cur_generated_face = cv2.cvtColor(cur_generated_face, cv2.COLOR_BGR2RGB)
 
-                    predict_labels.append([non_accent_name, faceI, content, cur_profile_face, cur_generated_face])
+                    predict_labels.append([non_accent_name, faceI, content, cur_profile_face, cur_generated_face, cur_picker_profile_face, role])
 
-                    temp_ids.append(id)
-                    temp_timelines.append(time_line)
-                    temp_roles.append(role)
+
             else:
                 cur_time += 1
                 if cur_time >= max_times:
@@ -412,39 +425,42 @@ def upload_data():
         if verified:
             from tkinter import messagebox
  
-            # prompt = messagebox.showwarning(title = "Warning!",
-            #                                 message = "Warning, errors may occur")
 
             new_user_id = simpledialog.askstring('New user ID', 'Please insert ID name')
-            role = ""
-            if take_sample_data_state_GV:
-                role = "teacher"
-            if take_sample_data_state_HS:
-                role = "student"
-            if take_sample_data_state_PH:
-                role = "parent"
+            if len(new_user_id) > 0:
 
-            payload = json.dumps({"secret_key": secret_key, "name": new_user_id, "img": sample_face_images, "type_role":role, "class_id":'-1', "picker_id":'-1', "age":'-1', "gender":'Nam'})
+                role = ""
+                if take_sample_data_state_GV:
+                    role = "teacher"
+                if take_sample_data_state_HS:
+                    role = "student"
+                if take_sample_data_state_PH:
+                    role = "parent"
 
-            response = requests.post(url + 'facereg', data=payload, headers=headers, timeout=100)
-            print('\nRegister new person is ' + response.json()['result']['message'] + '\n')
+                payload = json.dumps({"secret_key": secret_key, "name": new_user_id, "img": sample_face_images, "type_role":role, "class_id":'-1', "picker_id":'-1', "age":'-1', "gender":'Nam'})
 
-            check_points = (np.zeros(number_check_points) == 1)
-            take_sample_data_state = False
-            take_sample_data_state_GV = False
-            take_sample_data_state_HS = False
-            take_sample_data_state_PH = False
+                response = requests.post(url + 'facereg', data=payload, headers=headers, timeout=100)
+                print('\nRegister new person is ' + response.json()['result']['message'] + '\n')
 
-            mode_1_btn["state"] = NORMAL
-            # mode_2_btn["state"] = NORMAL
-            mode_3_btn["state"] = NORMAL
+                check_points = (np.zeros(number_check_points) == 1)
+                take_sample_data_state = False
+                take_sample_data_state_GV = False
+                take_sample_data_state_HS = False
+                take_sample_data_state_PH = False
 
-            sample_data_GV_btn["state"] = NORMAL
-            sample_data_HS_btn["state"] = NORMAL
-            sample_data_PH_btn["state"] = NORMAL
-            sample_face_images = []
-            # print('Complete update data')
-            cv2.destroyAllWindows()
+                mode_1_btn["state"] = NORMAL
+                # mode_2_btn["state"] = NORMAL
+                mode_3_btn["state"] = NORMAL
+
+                sample_data_GV_btn["state"] = NORMAL
+                sample_data_HS_btn["state"] = NORMAL
+                sample_data_PH_btn["state"] = NORMAL
+                sample_face_images = []
+                # print('Complete update data')
+                # cv2.destroyAllWindows()
+            else:
+                prompt = messagebox.showwarning(title = "Warning!",
+                                message = "Hãy nhập tên")
         else:
             print("\nWrong username & password\n")
 
@@ -600,7 +616,7 @@ class MainWindow():
         self.cap = cap
         self.width = frame_width
         self.height = frame_height
-        self.interval = 20 # Interval in ms to get the latest frame
+        self.interval = 1 # Interval in ms to get the latest frame
         self.prev_frame_time = 0
         self.new_frame_time = 0
 
@@ -608,7 +624,7 @@ class MainWindow():
         # self.canvas = tk.Canvas(self.window, width=self.width, height=self.height)
         # self.canvas.grid(row=0, column=0)
 
-        image_names = ['Ảnh tức thời', 'Ảnh bé', 'Ảnh người đón']
+        image_names = ['Ảnh tức thời', 'Ảnh học sinh', 'Ảnh GV/PH']
         for i, name_I in enumerate(image_names):
             image_name_zone.create_text(frame_width + distance_x + (crop_image_size + distance_x) * i + 60, int(distance_y * 0.5), text=name_I, fill="black", font=('Helvetica 15 bold'))
         
@@ -617,7 +633,7 @@ class MainWindow():
 
     def update_image(self):
         global count, predict_labels, temp_boxes, prev_frame_time, new_frame_time, queue, api_index, request_times, take_photo_state, protected_boxid, take_sample_data_state, temp_target_index
-        global image_id, temp_ids, temp_roles, temp_timelines, extend_pixel
+        global image_id, temp_ids, temp_roles, temp_timelines, extend_pixel, temp_peoplenames
         count += 1
 
         frame_show = np.ones((window_size_y, window_size_x, 3),dtype='uint8') * 255    
@@ -691,6 +707,7 @@ class MainWindow():
                 temp_target_index = largest_indices(box_dimensions)
 
             # draw_box(final_frame, temp_boxes, box_color=(0, 255, 0))
+            # temp_boxes = [temp_boxes[i] for i in temp_target_index]
             marks = fa.get_landmarks(orig_image, temp_boxes)
 
             if (api_index < 2 or (api_index == 2 and take_photo_state)):
@@ -706,7 +723,7 @@ class MainWindow():
                         xmax += extend_pixel
                         ymin -= 2 * extend_pixel
                         ymax += extend_pixel
-                        draw_box(final_frame, [[xmin, ymin, xmax, ymax]], box_color=(255, 0, 0))
+                        draw_box(final_frame, [[xmin, ymin, xmax, ymax]], box_color=(0, 255, 0))
 
                         xmin = 0 if xmin < 0 else xmin
                         ymin = 0 if ymin < 0 else ymin
@@ -716,52 +733,62 @@ class MainWindow():
                         # for index, idI in enumerate(landmarks):
                         #     cv2.circle(final_frame, (int(marks[index][0]), int(marks[index][1])), 5, (0, 0, 255), -1)  
 
-                        queue = [t for t in queue if t.is_alive()]
-                        if len(queue) < 3:
-                            queue.append(threading.Thread(target=face_recognize, args=(orig_image[ymin:ymax, xmin:xmax],)))
-                            # queue.append(threading.Thread(target=face_recognize, args=(orig_image)))
-                            queue[-1].start()
+                        # queue = [t for t in queue if t.is_alive()]
+                        # if len(queue) < 3:
+                        #     queue.append(threading.Thread(target=face_recognize, args=(orig_image[ymin:ymax, xmin:xmax],)))
+                        #     # queue.append(threading.Thread(target=face_recognize, args=(orig_image)))
+                        #     queue[-1].start()
+
+                        face_recognize(orig_image[ymin:ymax, xmin:xmax])
+
                         count = 0
                     take_photo_state = False
                     
                     # Check pickup process
                     if len(temp_boxes) > 1:
-                        if len(temp_ids) < 2 or len(temp_ids) < 2 or len(temp_ids) < 2:
-                            print('\nPick up fail\n')
-                        else: 
-                            # print('temp_target_index:', temp_target_index)
+                        print('\ntemp_ids:', temp_ids)
+                        print('temp_timelines:', temp_timelines)
+                        print('temp_roles:', temp_roles)
+                        print('temp_peoplenames:', temp_peoplenames)
+                        print('temp_target_index:', temp_target_index)
+                        print('\n')
+                        if len(temp_ids) == 2 and len(temp_timelines) == 2 and len(temp_roles) == 2:
                             index1 = temp_target_index[0]
                             index2 = temp_target_index[1]
-                            check_pickup_info = {}
-
-                            # print('temp_ids:', temp_ids)
-                            # print('temp_timelines:', temp_timelines)
-                            # print('temp_roles:', temp_roles)
-                            if (temp_roles[index1] == 'student' and temp_roles[index2] != 'student'):
-                                check_pickup_info = {
-                                    'student_id': temp_ids[index1],
-                                    'picker_id': temp_ids[index2],
-                                    'timeline_student': temp_timelines[index1],
-                                    'timeline_picker': temp_timelines[index2],
-                                    'secret_key': secret_key
-                                }
-                            if (temp_roles[index2] == 'student' and temp_roles[index1] != 'student'):
-                                check_pickup_info = {
-                                    'student_id': temp_ids[index2],
-                                    'picker_id': temp_ids[index1],
-                                    'timeline_student': temp_timelines[index2],
-                                    'timeline_picker': temp_timelines[index1],
-                                    'secret_key': secret_key
-                                }
-                            if len(check_pickup_info) > 0:
-                                # print('check_pickup_info:', check_pickup_info)
-                                headers = {'Content-type': 'application/json', 'Accept': 'text/plain', 'charset': 'utf-8'}
-                                payload = json.dumps(check_pickup_info)
-                                response = requests.post(api_list[3], data=payload, headers=headers, timeout=100)
-                                print('\nPick up ' + response.json()['result']['message'] + '\n')
+                            if index1 < 2 and index2 < 2:
+                                check_pickup_info = {}
+                                if (temp_roles[index1] == 'student' and temp_roles[index2] != 'student'):
+                                    check_pickup_info = {
+                                        'student_id': temp_ids[index1],
+                                        'picker_id': temp_ids[index2],
+                                        'timeline_student': temp_timelines[index1],
+                                        'timeline_picker': temp_timelines[index2],
+                                        'secret_key': secret_key
+                                    }
+                                if (temp_roles[index2] == 'student' and temp_roles[index1] != 'student'):
+                                    check_pickup_info = {
+                                        'student_id': temp_ids[index2],
+                                        'picker_id': temp_ids[index1],
+                                        'timeline_student': temp_timelines[index2],
+                                        'timeline_picker': temp_timelines[index1],
+                                        'secret_key': secret_key
+                                    }
+                                if len(check_pickup_info) > 0:
+                                    # print('check_pickup_info:', check_pickup_info)
+                                    headers = {'Content-type': 'application/json', 'Accept': 'text/plain', 'charset': 'utf-8'}
+                                    payload = json.dumps(check_pickup_info)
+                                    response = requests.post(api_list[3], data=payload, headers=headers, timeout=100)
+                                    if (response.json()['result']['message'] == 'success'):
+                                        print('\nPick up ' + response.json()['result']['message'] + '\n')
+                                        # say_hello('Đón thành công')
+                            else: 
+                                print('\nPick up fail\n')
+                        else:
                             temp_ids = []
                             temp_timelines = []
                             temp_roles = []
+                            temp_peoplenames = []
+                            temp_target_index = []
         image_name_y = 5
         temp_labels = list(reversed(predict_labels))
         for i, labelI in enumerate(temp_labels):
@@ -769,10 +796,24 @@ class MainWindow():
                 cv2.putText(frame_show, '{0}'.format(labelI[0]), (frame_width + distance_x, int((crop_image_size + distance_y) * i) + int(distance_y / 1.5)  + image_name_y), fontface, fontscale, (100, 255, 0))
 
                 frame_show[int((crop_image_size + distance_y) * i) + distance_y + image_name_y: int((crop_image_size + distance_y) * i) + distance_y + image_name_y + crop_image_size, frame_width + distance_x: frame_width + distance_x + crop_image_size, :] = labelI[1]
-
-                if labelI[3] is not None:
-                    frame_show[int((crop_image_size + distance_y) * i) + distance_y + image_name_y: int((crop_image_size + distance_y) * i) + distance_y + image_name_y + crop_image_size, frame_width + distance_x * 2 + crop_image_size: frame_width + distance_x * 2 + crop_image_size * 2, :] = labelI[3]
                 
+                if labelI[3] is not None:
+                    if labelI[6] == "student":
+                        frame_show[int((crop_image_size + distance_y) * i) + distance_y + image_name_y: int((crop_image_size + distance_y) * i) + distance_y + image_name_y + crop_image_size, frame_width + distance_x * 2 + crop_image_size: frame_width + distance_x * 2 + crop_image_size * 2, :] = labelI[3]
+                        if labelI[5] is not None:
+                            frame_show[int((crop_image_size + distance_y) * i) + distance_y + image_name_y: int((crop_image_size + distance_y) * i) + distance_y + image_name_y + crop_image_size, frame_width + distance_x * 3 + crop_image_size * 2: frame_width + distance_x * 3 + crop_image_size * 3, :] = labelI[5]
+                    else:
+                        frame_show[int((crop_image_size + distance_y) * i) + distance_y + image_name_y: int((crop_image_size + distance_y) * i) + distance_y + image_name_y + crop_image_size, frame_width + distance_x * 3 + crop_image_size * 2: frame_width + distance_x * 3 + crop_image_size * 3, :] = labelI[3]
+                        if labelI[5] is not None:
+                            frame_show[int((crop_image_size + distance_y) * i) + distance_y + image_name_y: int((crop_image_size + distance_y) * i) + distance_y + image_name_y + crop_image_size, frame_width + distance_x * 2 + crop_image_size: frame_width + distance_x * 2 + crop_image_size * 2, :] = labelI[5]
+
+
+                # else:
+                #     if labelI[3] is not None:
+                #         frame_show[int((crop_image_size + distance_y) * i) + distance_y + image_name_y: int((crop_image_size + distance_y) * i) + distance_y + image_name_y + crop_image_size, frame_width + distance_x * 2 + crop_image_size: frame_width + distance_x * 2 + crop_image_size * 2, :] = labelI[3]
+                #     if labelI[5] is not None:
+                #         frame_show[int((crop_image_size + distance_y) * i) + distance_y + image_name_y: int((crop_image_size + distance_y) * i) + distance_y + image_name_y + crop_image_size, frame_width + distance_x * 3 + crop_image_size: frame_width + distance_x * 2 + crop_image_size * 2, :] = labelI[5]
+
                 if labelI[4] is not None:
                     frame_show[int((crop_image_size + distance_y) * i) + distance_y + image_name_y: int((crop_image_size + distance_y) * i) + distance_y + image_name_y + crop_image_size, frame_width + distance_x * 3 + crop_image_size * 2: frame_width + distance_x * 3 + crop_image_size * 3, :] = labelI[4]
         
